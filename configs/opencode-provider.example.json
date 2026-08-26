@@ -1,0 +1,21 @@
+{
+  "provider": {
+    "local": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Local OpenAI-compatible endpoint",
+      "options": {
+        "baseURL": "http://YOUR_ENDPOINT_HOST:8002/v1",
+        "apiKey": "local"
+      },
+      "models": {
+        "YOUR_MODEL_NAME": {
+          "name": "local model",
+          "limit": {
+            "context": 131072,
+            "output": 32768
+          }
+        }
+      }
+    }
+  }
+}
