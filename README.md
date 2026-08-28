@@ -45,9 +45,12 @@ uv's standalone build (BOLT/PGO layout suspected).
 
 Mitigation in `run/bench.sh`: every trial's `verifier/test-stdout.txt` is scanned for
 segfault markers; invalid trials are excluded from the mean and counted in an
-`invalid_verifier` column. **Check that column before believing any score.** Candidate
-real fixes (untested): inject `UV_PYTHON_PREFERENCE=only-system` + a system python 3.13
-into task images, or a qemu build that survives BOLT-optimized binaries.
+`invalid_verifier` column. **Check that column before believing any score.** Upstream: this is astral-sh/uv **#16024** ("Segfault on amd64 under QEMU", open, labeled
+external) — and the uv binary itself can segfault too, so `UV_PYTHON_PREFERENCE=only-system`
+alone is not sufficient. The proven better paths (community evidence, Feb 2026): rebuild
+task images **natively for arm64** (a SWE-bench native rebuild showed 6.3x speedup with
+equivalent resolution rates), or run scoring on real x86 (Harbor cloud runners). Treat any
+qemu-scored number as non-citable trend data at best.
 
 ## Read this before comparing numbers
 
