@@ -30,6 +30,25 @@ bash run/bench.sh
 
 Results append to `results/scores.csv` (date, trials, errors, mean reward).
 
+## KNOWN ISSUE: TB2 verifiers segfault under qemu (scores silently zero)
+
+Bisected 2026-08-28: many TB2 task verifiers run `uvx -p 3.13 ... pytest`, and the
+**python-build-standalone binary uv downloads segfaults under qemu-user on arm64** —
+`uvx -p 3.13 python -c pass` alone crashes. The verifier dies before scoring, so the
+trial reads reward 0 *regardless of what the agent did*. In my first three nightly runs,
+29/30 trials were invalid this way.
+
+Tested without success: host apt qemu, tonistiigi/binfmt latest (QEMU v9), `QEMU_CPU`
+masking, `GLIBC_TUNABLES=glibc.pthread.rseq=0`. Docker-official python and the uv
+docker image's python both run fine under the same emulation — the crash is specific to
+uv's standalone build (BOLT/PGO layout suspected).
+
+Mitigation in `run/bench.sh`: every trial's `verifier/test-stdout.txt` is scanned for
+segfault markers; invalid trials are excluded from the mean and counted in an
+`invalid_verifier` column. **Check that column before believing any score.** Candidate
+real fixes (untested): inject `UV_PYTHON_PREFERENCE=only-system` + a system python 3.13
+into task images, or a qemu build that survives BOLT-optimized binaries.
+
 ## Read this before comparing numbers
 
 Scores produced this way are **trend data, not leaderboard-comparable**:
