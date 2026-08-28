@@ -36,24 +36,30 @@ harbor run -d terminal-bench@2.0 -a opencode -m "local/$LOCAL_MODEL" \
   -l "$PANEL_SIZE" -n "$TRIALS" \
   --output-dir "$RESULTS_DIR/$JOB"
 
-# append summary: date,trials,errors,mean_reward
+# append summary with the verifier-validity gate (see KNOWN ISSUE in README):
+# a segfaulted verifier scores 0 regardless of agent work -> those trials are INVALID
 python3 - "$RESULTS_DIR/$JOB" "$RESULTS_DIR/scores.csv" <<'PY'
-import json, glob, sys, os, csv, datetime
+import glob, sys, os, csv, datetime
 job, out = sys.argv[1], sys.argv[2]
-rewards, errors = [], 0
-for f in glob.glob(os.path.join(job, "**", "result.json"), recursive=True):
-    try:
-        r = json.load(open(f))
-        v = r.get("reward")
-        if v is None: errors += 1
-        else: rewards.append(float(v))
-    except Exception:
-        errors += 1
+rewards, invalid, errors = [], 0, 0
+for d in glob.glob(os.path.join(job, "*/")):
+    vt = os.path.join(d, "verifier", "test-stdout.txt")
+    if os.path.exists(vt):
+        t = open(vt, errors="replace").read()
+        if "Segmentation fault" in t or "uncaught target signal" in t:
+            invalid += 1
+            continue
+    rw = os.path.join(d, "verifier", "reward.txt")
+    if os.path.exists(rw):
+        try:
+            rewards.append(float(open(rw).read().strip()))
+        except ValueError:
+            errors += 1
 new = not os.path.exists(out)
 with open(out, "a", newline="") as fh:
     w = csv.writer(fh)
-    if new: w.writerow(["date", "trials", "errors", "mean_reward"])
-    mean = sum(rewards)/len(rewards) if rewards else ""
-    w.writerow([datetime.date.today().isoformat(), len(rewards), errors, mean])
+    if new: w.writerow(["date", "valid_trials", "errors", "mean_reward_valid", "invalid_verifier"])
+    mean = f"{sum(rewards)/len(rewards):.3f}" if rewards else ""
+    w.writerow([datetime.date.today().isoformat(), len(rewards), errors, mean, invalid])
 print("appended:", out)
 PY
