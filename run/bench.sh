@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Run a fixed Terminal-Bench 2.0 panel against a local OpenAI-compatible endpoint,
-# with the multipliers needed for amd64-under-qemu on arm64.
+# building each task environment natively (--force-build) so the TB2 verifier runs
+# without qemu. Multipliers are sized from 84 native trials (setup max 124s, agent
+# p90 4638s); the old 8/6/3 values were for emulation.
 #
 # Env:
 #   LOCAL_BASE_URL   e.g. http://192.168.1.50:8002/v1        (required)
@@ -30,18 +32,23 @@ EOF
 harbor run -d terminal-bench@2.0 -a opencode -m "local/$LOCAL_MODEL" \
   --ak "opencode_config=$OPENCODE_CONFIG" \
   --allow-agent-host "$HOST_IP" \
-  --agent-setup-timeout-multiplier 8 \
-  --agent-timeout-multiplier 6 \
-  --timeout-multiplier 3 \
+  --force-build \
+  --agent-setup-timeout-multiplier 3 \
+  --agent-timeout-multiplier 2 \
+  --timeout-multiplier 2 \
   -l "$PANEL_SIZE" -n "$TRIALS" \
   --output-dir "$RESULTS_DIR/$JOB"
 
-# append summary with the verifier-validity gate (see KNOWN ISSUE in README):
-# a segfaulted verifier scores 0 regardless of agent work -> those trials are INVALID
+# append summary with the verifier-validity gate (kept: a segfaulted verifier scores 0
+# regardless of agent work -> those trials are INVALID; expected 0 under native builds)
 python3 - "$RESULTS_DIR/$JOB" "$RESULTS_DIR/scores.csv" <<'PY'
-import glob, sys, os, csv, datetime
+import glob, sys, os, csv, datetime, json
 job, out = sys.argv[1], sys.argv[2]
 rewards, invalid, errors = [], 0, 0
+try:
+    st = json.load(open(os.path.join(job, "result.json"))).get("stats", {})
+except Exception:
+    st = {}
 for d in glob.glob(os.path.join(job, "*/")):
     vt = os.path.join(d, "verifier", "test-stdout.txt")
     if os.path.exists(vt):
@@ -58,8 +65,9 @@ for d in glob.glob(os.path.join(job, "*/")):
 new = not os.path.exists(out)
 with open(out, "a", newline="") as fh:
     w = csv.writer(fh)
-    if new: w.writerow(["date", "valid_trials", "errors", "mean_reward_valid", "invalid_verifier"])
+    if new: w.writerow(["date", "valid_trials", "errors", "mean_reward_valid", "in_tokens", "out_tokens", "invalid_verifier"])
     mean = f"{sum(rewards)/len(rewards):.3f}" if rewards else ""
-    w.writerow([datetime.date.today().isoformat(), len(rewards), errors, mean, invalid])
+    w.writerow([datetime.date.today().isoformat(), len(rewards), errors, mean,
+                st.get("n_input_tokens", ""), st.get("n_output_tokens", ""), invalid])
 print("appended:", out)
 PY

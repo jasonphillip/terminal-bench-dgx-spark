@@ -1,0 +1,21 @@
+# terminal-bench-dgx-spark
+
+> A reproducible Harbor and Terminal-Bench runner for OpenAI-compatible local model endpoints on arm64 DGX Spark hosts, including amd64 emulation setup and invalid-verifier filtering.
+
+## Project documentation
+
+- [README.md](README.md): Explains host constraints, benchmark caveats, quickstart steps, and the verifier failure mode.
+- [LICENSE](LICENSE): Contains the MIT license terms.
+
+## Configuration
+
+- [configs/opencode-provider.example.json](configs/opencode-provider.example.json): Defines an OpenCode provider for an OpenAI-compatible local endpoint.
+
+## Setup and entry point
+
+- [setup/enable-amd64-emulation.sh](setup/enable-amd64-emulation.sh): Enables amd64 container emulation and IPv4 forwarding on the host.
+- [run/bench.sh](run/bench.sh): Runs the fixed task panel and excludes verifier segfaults from the score summary.
+
+## Results
+
+- [results/README.md](results/README.md): Defines the generated score file and its comparison limits.

@@ -3,6 +3,16 @@
 Run [Harbor / Terminal-Bench 2.0](https://www.tbench.ai/) against a **local model served
 on NVIDIA DGX Spark** hardware — and against any OpenAI-compatible local endpoint.
 
+## What this is, in one verifiable line
+
+Seven consecutive nightly runs of a rotating 12-task Terminal-Bench 2.0 panel on one DGX Spark produced 84 valid trials and 0 invalid verifiers once harbor built the task images natively for arm64. <!-- results/scores.csv -->
+
+The mechanism is `--force-build` in place of qemu emulation.
+
+Verify it by reading `results/scores.csv` and the resolution note in this README.
+
+The canonical source is https://github.com/jasonphillip/terminal-bench-dgx-spark
+
 As far as I can find, nobody publishes agentic-benchmark numbers for local models on GB10
 hardware. This repo documents the full working setup, because getting there is non-obvious:
 TB2 task images are amd64, DGX Spark is arm64, and the stock agent provider config rejects
