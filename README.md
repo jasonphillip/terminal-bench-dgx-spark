@@ -30,7 +30,17 @@ bash run/bench.sh
 
 Results append to `results/scores.csv` (date, trials, errors, mean reward).
 
-## KNOWN ISSUE: TB2 verifiers segfault under qemu (scores silently zero)
+## RESOLVED 2026-08-28: build task images natively instead of emulating
+
+Every TB2 task ships a Dockerfile, and all 36 cached tasks build cleanly for arm64.
+Passing `--force-build` to `harbor run` makes harbor build each environment from its
+Dockerfile on the local daemon instead of pulling the amd64 prebuilt image. The verifier
+then runs natively and the segfault below never happens. Seven consecutive nightly runs
+(2026-08-29 to 2026-09-04) produced 84 valid trials and 0 invalid verifiers; see
+`results/scores.csv`. The emulation notes below are kept for anyone who still needs
+amd64 images for other reasons.
+
+## HISTORICAL: TB2 verifiers segfault under qemu (scores silently zero)
 
 Bisected 2026-08-28: many TB2 task verifiers run `uvx -p 3.13 ... pytest`, and the
 **python-build-standalone binary uv downloads segfaults under qemu-user on arm64** —
