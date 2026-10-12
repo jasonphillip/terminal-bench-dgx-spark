@@ -12,7 +12,7 @@ Verify it by reading `results/scores.csv` and the resolution note in this README
 
 ## What works today and its limits
 
-The revised `run/bench.sh` runs a small panel through Harbor and builds task images locally. The seven recorded nights are trend data for a rotating panel, not leaderboard results. A 12-task panel has high variance. Native builds take longer on the first run, and some task Dockerfiles may not build on arm64.
+The revised `run/bench.sh` runs a small panel through Harbor and builds task images locally. The seven recorded nights are trend data for a rotating panel. They are not comparable to leaderboard results. A 12-task panel has high variance. Native builds take longer on the first run, and some task Dockerfiles may not build on arm64.
 
 ## Setup
 
@@ -22,7 +22,7 @@ Use an arm64 host with Docker available to your user through the `docker` group.
 
 ## Quickstart
 
-Set the endpoint and model name to values served by your local OpenAI-compatible server. This is the revised runner, not the script that produced the recorded CSV.
+Set the endpoint and model name to values served by your local OpenAI-compatible server. This is the revised runner. The recorded CSV came from an earlier nightly script, described below.
 
 ```bash
 export LOCAL_BASE_URL="http://<your-endpoint>:8002/v1"
@@ -36,7 +36,7 @@ bash run/bench.sh
 
 ## One measured result
 
-On 2026-09-04, the recorded CSV reports 12 valid trials, 1 error, 0 invalid verifiers, and mean reward 0.667. The evidence bundle recomputes 12 valid, 0 error, 0 invalid verifier, and mean reward 0.667 from that job's trial files. The error-count difference is unresolved. The CSV stays as recorded.
+On 2026-09-04, the recorded CSV reports 12 valid trials, 1 error, 0 invalid verifiers, and mean reward 0.667. Harbor's job `result.json` records one errored trial: `install-windows-3.11` raised `AgentTimeoutError` ("Agent execution timed out after 21600.0 seconds") and still wrote reward 0. The nightly CSV counted Harbor's agent-side exception as an error and included its reward in the 12 valid trials. The evidence bundle counts reward files instead, so it recomputes 12 valid trials, 0 errors, 0 invalid verifiers, and mean reward 0.667. The CSV stays as recorded.
 
 ```text
 https://github.com/jasonphillip/terminal-bench-dgx-spark/blob/main/results/scores.csv
@@ -55,13 +55,13 @@ The OpenCode trial versions were 1.18.25 on 2026-08-29 through 2026-09-01, 1.18.
 
 The nightly script passed `-x` for every task in its seen list. Exclusion counts were 0, 12, 24, 36, 47, 58, and 69. Harbor's first-12 selection then reached new tasks. A seen-list bug repeated `install-windows-3.11` on 2026-09-01 through 2026-09-04. The bug was fixed on 2026-09-04. The 84 trials cover 81 distinct tasks.
 
-The old summary counted an error only when a reward file existed but failed to parse. It did not count a trial with no reward file. The revised summarizer counts missing, unreadable, malformed, and nonfinite rewards as errors. It excludes a verifier with a segfault marker from the valid mean. `results/scores.csv` stays as recorded. `results/evidence/` holds recomputed per-trial records and sanitized job metadata. Jobs from 2026-09-05 through 2026-09-09 exist in the job store but are not in the CSV.
+The nightly CSV's `errors` column counted Harbor's errored trials, including agent-side exceptions that still wrote reward 0. The file-based evidence recount counts reward files, so that trial is valid there and adds no error. The revised summarizer counts missing, unreadable, malformed, and nonfinite rewards as errors. It excludes a verifier with a segfault marker from the valid mean. `results/scores.csv` stays as recorded. `results/evidence/` holds recomputed per-trial records and sanitized job metadata. Jobs from 2026-09-05 through 2026-09-09 exist in the job store but are not in the CSV.
 
 ## HISTORICAL: TB2 verifiers segfault under qemu
 
 Many TB2 verifiers ran `uvx -p 3.13 ... pytest` under qemu-user. `uvx -p 3.13 python -c pass` alone crashed. The verifier stopped before scoring, so reward 0 did not describe the agent's work. The first three nightly runs had 29 invalid trials out of 30, as documented during the investigation.
 
-Host apt qemu, the latest `tonistiigi/binfmt`, `QEMU_CPU` masking, and `GLIBC_TUNABLES=glibc.pthread.rseq=0` did not fix the crash. Docker-official Python and the uv image's Python ran under the same emulation. The issue was tracked upstream at:
+Host apt qemu, the latest `tonistiigi/binfmt`, `QEMU_CPU` masking, and `GLIBC_TUNABLES=glibc.pthread.rseq=0` did not fix the crash. Docker-official Python and the uv image's Python ran under the same emulation. The upstream report is astral-sh/uv issue 16024.
 
 ```text
 https://github.com/astral-sh/uv/issues/16024
@@ -75,7 +75,7 @@ These scores track this harness and model over time. A local model's tokens per 
 
 ## Hardware context
 
-External llama.cpp batch-1 measurements report dense models at about 10 tok/s and Qwen3 30B-A3B at up to about 89 tok/s on DGX Spark. External Ollama dense results report 9.4 to 10.1 tok/s. Sources:
+External llama.cpp batch-1 measurements report dense models at about 10 tok/s and Qwen3 30B-A3B at up to about 89 tok/s on DGX Spark. External Ollama dense results report 9.4 to 10.1 tok/s. The public figures come from these pages.
 
 ```text
 https://github.com/DandinPower/llama.cpp_bench/blob/main/dgx_spark/report.md
@@ -84,9 +84,9 @@ https://huggingface.co/datasets/G3nadh/dgx-spark-benchmarks
 
 Dense decode is too slow for agentic loops by my criterion: at ~10 tok/s a 2,000-token agent turn takes over three minutes. In my own vLLM FP8 runs on 2026-09-04, four 256-token generations measured 50 to 53 tok/s single stream. Those measurements are recorded in the companion repo's evidence folder.
 
-When I started in August 2026 I found no published agentic-benchmark numbers for local models on GB10. That is my own search, not a survey.
+When I started in August 2026 I found no published agentic-benchmark numbers for local models on GB10. That was my own search and I did not run a survey.
 
-Companion repo:
+Serving notes live in the companion repo.
 
 ```text
 https://github.com/jasonphillip/dgx-spark-llm-serving
