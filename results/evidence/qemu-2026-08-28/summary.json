@@ -7,5 +7,5 @@
   "errored_trials": 1,
   "harbor_errored_trials": 1,
   "mean_reward_valid": null,
-  "completion_rate": 0.0
+  "valid_reward_fraction": 0.0
 }

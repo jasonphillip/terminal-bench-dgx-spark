@@ -156,7 +156,7 @@ def export(job, out, harbor_version=None):
                "errored_trials": exception_count,
                "harbor_errored_trials": result.get("stats", {}).get("n_errored_trials"),
                "mean_reward_valid": sum(rewards) / len(rewards) if rewards else None,
-               "completion_rate": counts["valid"] / len(records) if records else None}
+               "valid_reward_fraction": counts["valid"] / len(records) if records else None}
     manifest = {
         "job_name": public_name(config["job_name"]), "dataset_name": public_name(dataset["name"]),
         "dataset_version": public_name(dataset["version"]),

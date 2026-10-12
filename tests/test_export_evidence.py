@@ -42,7 +42,7 @@ def test_missing_result_counts_as_incomplete(tmp_path):
     summary = module.export(job, out)
     assert summary["total_trials"] == 2
     assert summary["incomplete"] == 1
-    assert summary["completion_rate"] == 0.5
+    assert summary["valid_reward_fraction"] == 0.5
     trial = next(t for t in json.loads((out / "trials.json").read_text())
                  if t["task_name"] == "install-windows-3.11")
     assert trial["status"] == "incomplete"
@@ -136,7 +136,7 @@ def test_export_sanitizes_and_classifies(tmp_path):
                        "invalid_verifier": 1, "incomplete": 0,
                        "errored_trials": 4, "harbor_errored_trials": None,
                        "mean_reward_valid": 1.0,
-                       "completion_rate": 0.25}
+                       "valid_reward_fraction": 0.25}
     manifest = json.loads((out / "manifest.json").read_text())
     assert manifest["task_list"] == ["valid", "missing", "nan", "segfault"]
     assert manifest["base_url"] == "http://<inference-host>:8002/v1"
