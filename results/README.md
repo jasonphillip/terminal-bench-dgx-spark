@@ -1,17 +1,11 @@
 # Results
 
-`scores.csv` accumulates one row per nightly run since the native-arm64 fix:
-`date,valid_trials,errors,mean_reward_valid,in_tokens,out_tokens,invalid_verifier`.
-Each new run also writes `<job>.trials.json` with run settings and one sanitized
-status and reward record per trial. Missing or unreadable rewards count as errors.
+`scores.csv` contains seven recorded nightly rows from 2026-08-29 through 2026-09-04. A nightly timer script on the harness DGX Spark produced them. The current `run/bench.sh` is a revised runner and did not produce these rows. Jobs from 2026-09-05 through 2026-09-09 exist in the job store but are not in this CSV.
 
-Rows before 2026-08-29 are not included. Under qemu emulation the TB2 verifier
-segfaulted before running tests, so every earlier score was invalid rather than zero.
-From 2026-08-29 harbor builds each task environment natively with `--force-build`
-and `invalid_verifier` has been 0 on every night.
+The nightly jobs used Harbor 0.22.0, Terminal-Bench 2.0, and OpenCode with the `dsv4` OpenAI-compatible provider. The model was DeepSeek V4 Flash, named `deepseek-v4-flash`, on a remote vLLM endpoint. vLLM used tensor parallelism across two other DGX Sparks on the same LAN. The harness and task containers ran on a third DGX Spark. The served context limit was 458,752 tokens. OpenCode advertised context 458752 and output 32768. Trial records show OpenCode 1.18.25 on 2026-08-29 through 2026-09-01, 1.18.26 on 2026-09-02, and 1.18.27 on 2026-09-03 and 2026-09-04.
 
-These are trend numbers on a rotating 12-task panel with generous timeouts, driven by
-one local model (DeepSeek V4 Flash via opencode). They track my own harness and model
-changes over time. They are not comparable to leaderboard runs, and the panel rotates,
-so night-to-night variance is mostly task mix. Read the caveats in the top-level README
-before quoting anything here.
+Each night used one attempt per task, 12 tasks, two concurrent trials, `--force-build`, and timeout multipliers 8/6/3 for agent setup, agent, and overall execution. The revised runner defaults to 3/2/2. The script passed `-x` for every previously seen task. Exclusion counts were 0, 12, 24, 36, 47, 58, and 69. Harbor selected the first 12 remaining tasks each night. A seen-list bug repeated `install-windows-3.11` on 2026-09-01 through 2026-09-04. It was fixed on 2026-09-04. There were 84 trials across 81 distinct tasks.
+
+The old summary counted an error only when a reward file existed but failed to parse. Missing reward files were not counted. The current summarizer counts missing, unreadable, malformed, and nonfinite rewards as errors. It marks a trial with verifier segfault output as `invalid_verifier` before reading a reward. The CSV remains as recorded. `evidence/native-2026-09-04/` and `evidence/qemu-2026-08-28/` contain recomputed per-trial records, summaries, sanitized metadata, a reconstructed command, and one verifier excerpt. The native bundle has 12 valid trials and 0 invalid verifiers. The qemu bundle has 12 invalid verifiers. The 2026-09-04 CSV reports one error, while the native bundle recomputes zero. The difference is unresolved.
+
+These are trend numbers on small rotating panels. Task mix and local model speed affect each result. They are not leaderboard-comparable.

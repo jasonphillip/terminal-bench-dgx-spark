@@ -1,0 +1,40 @@
+                assert res.returncode == 0, f"Failed to send {description} via monitor"
+    
+                time.sleep(2)
+    
+                # After screenshot
+                screenshot_name = f"after_key_{i}.png"
+                assert subprocess.run([
+                    "vncsnapshot", "-allowblank", "localhost:1", screenshot_name
+                ], capture_output=True, timeout=10).returncode == 0, f"Failed screenshot after {description}"
+    
+                after_img = cv2.imread(screenshot_name, cv2.IMREAD_GRAYSCALE)
+                assert after_img is not None, f"Invalid screenshot after {description}"
+    
+                # Percentage of different pixels
+                diff_pct = (np.count_nonzero(baseline_img != after_img) / baseline_img.size) * 100.0
+    
+                if diff_pct >= threshold_pct:
+                    baseline_path.unlink(missing_ok=True)
+                    return
+    
+            # If none exceeded threshold
+            baseline_path.unlink(missing_ok=True)
+            assert False, "No key caused >=10% image difference"
+    
+        except subprocess.TimeoutExpired:
+            assert False, "Screenshot or keyboard test timed out"
+        except Exception as e:
+>           assert False, f"Windows keyboard test failed: {e}"
+E           AssertionError: Windows keyboard test failed: No key caused >=10% image difference
+E             assert False
+E           assert False
+
+/tests/test_outputs.py:408: AssertionError
+==================================== PASSES ====================================
+=========================== short test summary info ============================
+PASSED ../tests/test_outputs.py::test_network_status
+PASSED ../tests/test_outputs.py::test_windows_311_core_files_verification
+FAILED ../tests/test_outputs.py::test_qemu_running_with_correct_params - Asse...
+FAILED ../tests/test_outputs.py::test_windows_keys_with_visual_feedback - Ass...
+========================= 2 failed, 2 passed in 16.70s =========================

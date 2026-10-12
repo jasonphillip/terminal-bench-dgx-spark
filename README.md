@@ -1,7 +1,6 @@
 # Terminal-Bench 2.0 on NVIDIA DGX Spark (GB10 / arm64)
 
-Run [Harbor / Terminal-Bench 2.0](https://www.tbench.ai/) against a **local model served
-on NVIDIA DGX Spark** hardware — and against any OpenAI-compatible local endpoint.
+This repository helps someone run Terminal-Bench 2.0 against a local model on an arm64 DGX Spark. Terminal-Bench task images and verifiers need native arm64 builds for trustworthy scores on this host.
 
 ## What this is, in one verifiable line
 
@@ -11,98 +10,91 @@ The mechanism is `--force-build` in place of qemu emulation.
 
 Verify it by reading `results/scores.csv` and the resolution note in this README.
 
-The canonical source is https://github.com/jasonphillip/terminal-bench-dgx-spark
+## What works today and its limits
 
-Extracted from a private working tree on 2026-08-26.
+The revised `run/bench.sh` runs a small panel through Harbor and builds task images locally. The seven recorded nights are trend data for a rotating panel, not leaderboard results. A 12-task panel has high variance. Native builds take longer on the first run, and some task Dockerfiles may not build on arm64.
 
-As far as I can find, nobody publishes agentic-benchmark numbers for local models on GB10
-hardware. This repo documents the full working setup, because getting there is non-obvious:
-TB2 task images are amd64, DGX Spark is arm64, and the stock agent provider config rejects
-common local servers.
+## Setup
 
-## The three problems and their fixes
+This host has Harbor 0.22.0 in its user Python site packages, with `harbor` at `~/.local/bin/harbor`. Install Harbor 0.22.0 with your preferred Python tool installer on another host. Harbor installs OpenCode inside the task container. The recorded trials used OpenCode 1.18.25 through 1.18.27.
 
-| Problem | Symptom | Fix |
-|---|---|---|
-| amd64 task images on arm64 | task containers exit 255 | `--force-build` builds task images natively for arm64 (former workaround: qemu binfmt + `net.ipv4.ip_forward=1`) |
-| task setup and execution timeouts | `AgentSetupTimeoutError` | native builds with `--force-build` and setup/agent/task timeout multipliers 3/2/2 (former workaround: setup multiplier 8 under qemu) |
-| stock `openai` provider vs local servers | vLLM returns 214 validation errors (`string_type`) | inject an `@ai-sdk/openai-compatible` provider via `--ak opencode_config=` (`configs/opencode-provider.example.json`) |
+Use an arm64 host with Docker available to your user through the `docker` group. Enable IPv4 forwarding for task networking. `--force-build` builds each task image from its Dockerfile on the host. A task image is not guaranteed to build on arm64.
 
 ## Quickstart
+
+Set the endpoint and model name to values served by your local OpenAI-compatible server. This is the revised runner, not the script that produced the recorded CSV.
 
 ```bash
 export LOCAL_BASE_URL="http://<your-endpoint>:8002/v1"
 export LOCAL_MODEL="<served-model-name>"
-export TRIALS=2       # attempts per task
-export CONCURRENCY=2  # concurrent trials
-bash run/smoke.sh   # check Harbor, Docker, and the command without inference
-# Host prerequisite: task networking requires IPv4 forwarding.
+bash run/smoke.sh
 sudo sysctl -w net.ipv4.ip_forward=1
-# run/bench.sh passes --force-build so task images build natively for arm64 (no qemu).
 bash run/bench.sh
 ```
 
-Flags checked against the Harbor 0.22.0 CLI.
+`run/bench.sh` defaults to two attempts per task, two concurrent trials, and timeout multipliers 3/2/2. It creates a timestamped job name. Reusing `JOB` resumes that job.
 
-Reusing a `JOB` name resumes that job. A new name is an independent repeat.
-By default, `run/bench.sh` generates a timestamped job name.
+## One measured result
 
-Results append to `results/scores.csv` (date, valid trials, errors, mean reward); `results/<job>.trials.json` records run settings and trial outcomes.
+On 2026-09-04, the recorded CSV reports 12 valid trials, 1 error, 0 invalid verifiers, and mean reward 0.667. The evidence bundle recomputes 12 valid, 0 error, 0 invalid verifier, and mean reward 0.667 from that job's trial files. The error-count difference is unresolved. The CSV stays as recorded.
 
-## RESOLVED 2026-08-28: build task images natively instead of emulating
+```text
+https://github.com/jasonphillip/terminal-bench-dgx-spark/blob/main/results/scores.csv
+https://github.com/jasonphillip/terminal-bench-dgx-spark/tree/main/results/evidence/native-2026-09-04
+```
 
-Every TB2 task ships a Dockerfile, and all 36 cached tasks build cleanly for arm64.
-Passing `--force-build` to `harbor run` makes harbor build each environment from its
-Dockerfile on the local daemon instead of pulling the amd64 prebuilt image. The verifier
-then runs natively and the segfault below never happens. Seven consecutive nightly runs
-(2026-08-29 to 2026-09-04) produced 84 valid trials and 0 invalid verifiers; see
-`results/scores.csv`. The emulation notes below are kept for anyone who still needs
-amd64 images for other reasons.
+## Main engineering decision
 
-## HISTORICAL: TB2 verifiers segfault under qemu (scores silently zero)
+I chose native arm64 task builds with `--force-build` over qemu emulation or x86 cloud runners. The first build is slower. The verifiers run natively, so their rewards can pass the validity gate. See `docs/verifier-segfault-case-study.md` for the failure and decision record.
 
-Run `sudo bash setup/enable-amd64-emulation.sh` only if you must run the amd64 prebuilt images instead of building natively.
+## Recorded-run provenance
 
-Bisected 2026-08-28: many TB2 task verifiers run `uvx -p 3.13 ... pytest`, and the
-**python-build-standalone binary uv downloads segfaults under qemu-user on arm64** —
-`uvx -p 3.13 python -c pass` alone crashes. The verifier dies before scoring, so the
-trial reads reward 0 *regardless of what the agent did*. In my first three nightly runs,
-29/30 trials were invalid this way.
+A nightly timer script on the harness DGX Spark produced the seven rows dated 2026-08-29 through 2026-09-04. `run/bench.sh` is the revised runner and did not produce those rows. Harbor was 0.22.0 every night. The harness and task containers ran on a third DGX Spark. A remote vLLM endpoint used tensor parallelism across two other DGX Sparks on the same LAN. OpenCode used the `dsv4` OpenAI-compatible provider and model `deepseek-v4-flash`, DeepSeek V4 Flash. The served context limit was 458,752 tokens. OpenCode advertised context 458752 and output 32768.
 
-Tested without success: host apt qemu, tonistiigi/binfmt latest (QEMU v9), `QEMU_CPU`
-masking, `GLIBC_TUNABLES=glibc.pthread.rseq=0`. Docker-official python and the uv
-docker image's python both run fine under the same emulation — the crash is specific to
-uv's standalone build (BOLT/PGO layout suspected).
+The OpenCode trial versions were 1.18.25 on 2026-08-29 through 2026-09-01, 1.18.26 on 2026-09-02, and 1.18.27 on 2026-09-03 and 2026-09-04. Each night selected 12 Terminal-Bench 2.0 tasks with one attempt per task, two concurrent trials, `--force-build`, and setup, agent, and overall timeout multipliers 8/6/3. The revised runner defaults to 3/2/2.
 
-Mitigation in `run/bench.sh`: every trial's `verifier/test-stdout.txt` is scanned for
-segfault markers; invalid trials are excluded from the mean and counted in an
-`invalid_verifier` column. **Check that column before believing any score.** Upstream: this is astral-sh/uv **#16024** ("Segfault on amd64 under QEMU", open, labeled
-external) — and the uv binary itself can segfault too, so `UV_PYTHON_PREFERENCE=only-system`
-alone is not sufficient. The proven better paths (community evidence, Feb 2026): rebuild
-task images **natively for arm64** (a SWE-bench native rebuild showed 6.3x speedup with
-equivalent resolution rates), or run scoring on real x86 (Harbor cloud runners). Treat any
-qemu-scored number as non-citable trend data at best.
+The nightly script passed `-x` for every task in its seen list. Exclusion counts were 0, 12, 24, 36, 47, 58, and 69. Harbor's first-12 selection then reached new tasks. A seen-list bug repeated `install-windows-3.11` on 2026-09-01 through 2026-09-04. The bug was fixed on 2026-09-04. The 84 trials cover 81 distinct tasks.
+
+The old summary counted an error only when a reward file existed but failed to parse. It did not count a trial with no reward file. The revised summarizer counts missing, unreadable, malformed, and nonfinite rewards as errors. It excludes a verifier with a segfault marker from the valid mean. `results/scores.csv` stays as recorded. `results/evidence/` holds recomputed per-trial records and sanitized job metadata. Jobs from 2026-09-05 through 2026-09-09 exist in the job store but are not in the CSV.
+
+## HISTORICAL: TB2 verifiers segfault under qemu
+
+Many TB2 verifiers ran `uvx -p 3.13 ... pytest` under qemu-user. `uvx -p 3.13 python -c pass` alone crashed. The verifier stopped before scoring, so reward 0 did not describe the agent's work. The first three nightly runs had 29 invalid trials out of 30, as documented during the investigation.
+
+Host apt qemu, the latest `tonistiigi/binfmt`, `QEMU_CPU` masking, and `GLIBC_TUNABLES=glibc.pthread.rseq=0` did not fix the crash. Docker-official Python and the uv image's Python ran under the same emulation. The issue was tracked upstream at:
+
+```text
+https://github.com/astral-sh/uv/issues/16024
+```
+
+The 2026-08-28 qemu evidence bundle has 12 invalid verifiers. The native 2026-09-04 bundle has 0. The summarizer still checks `verifier/test-stdout.txt` for segfault markers before accepting a reward. See the case study for the limits of this comparison.
 
 ## Read this before comparing numbers
 
-Scores produced this way are **trend data, not leaderboard-comparable**:
-
-- Task images are built from each task Dockerfile with `--force-build`, with setup/agent/task timeout multipliers of 3/2/2.
-- A local model's tokens/sec changes how much work fits inside timeouts.
-- Small fixed panels (6–12 tasks) have high variance; the first-6-alphabetical TB2 tasks
-  are all hard — a 0/6 night is signal about the panel, not only the model.
-
-The honest use of this setup: track **your own** harness/model changes over time on a
-fixed panel. Do not put these numbers next to leaderboard runs.
+These scores track this harness and model over time. A local model's tokens per second changes the work that fits inside each timeout. The rotating panel changes the task mix each night. Do not compare these scores directly with leaderboard runs.
 
 ## Hardware context
 
-Measured on DGX Spark (GB10, 128 GB unified, ~273 GB/s memory bandwidth). Decode is
-bandwidth-bound: dense ~32B models decode at ~10 tok/s (unusable for agentic loops);
-MoE models with small active parameter counts are the workable class (e.g.
-Qwen3-30B-A3B up to ~89 tok/s single-stream in public llama.cpp benchmarks).
-Serving notes live in a companion repo:
-[dgx-spark-llm-serving](https://github.com/jasonphillip/dgx-spark-llm-serving).
+External llama.cpp batch-1 measurements report dense models at about 10 tok/s and Qwen3 30B-A3B at up to about 89 tok/s on DGX Spark. External Ollama dense results report 9.4 to 10.1 tok/s. Sources:
+
+```text
+https://github.com/DandinPower/llama.cpp_bench/blob/main/dgx_spark/report.md
+https://huggingface.co/datasets/G3nadh/dgx-spark-benchmarks
+```
+
+Dense decode is too slow for agentic loops by my criterion: at ~10 tok/s a 2,000-token agent turn takes over three minutes. In my own vLLM FP8 runs on 2026-09-04, four 256-token generations measured 50 to 53 tok/s single stream. Those measurements are recorded in the companion repo's evidence folder.
+
+When I started in August 2026 I found no published agentic-benchmark numbers for local models on GB10. That is my own search, not a survey.
+
+Companion repo:
+
+```text
+https://github.com/jasonphillip/dgx-spark-llm-serving
+```
+
+## How this was built
+
+I built this with LLM coding agents, Claude Code and Codex, under my direction. I set the requirements, chose the native-build approach, debugged the verifier failure, reviewed every change, and set the acceptance criteria. The agents wrote most of the code and tests.
 
 ## License
 

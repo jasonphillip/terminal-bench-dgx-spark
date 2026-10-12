@@ -1,0 +1,41 @@
+{
+  "job_name": "nightly-2026-08-28",
+  "dataset_name": "terminal-bench",
+  "dataset_version": "2.0",
+  "task_list": [
+    "path-tracing-reverse",
+    "regex-chess",
+    "modernize-scientific-stack",
+    "torch-tensor-parallelism",
+    "path-tracing",
+    "prove-plus-comm",
+    "feal-linear-cryptanalysis",
+    "caffe-cifar-10",
+    "distribution-search",
+    "mteb-retrieve",
+    "pypi-server",
+    "custom-memory-heap-crash"
+  ],
+  "exclude_count": 12,
+  "model_name": "deepseek-v4-flash",
+  "provider_name": "dsv4",
+  "inference_location": "remote vLLM endpoint on the LAN",
+  "base_url": "http://<inference-host>:8002/v1",
+  "context_limit": 458752,
+  "output_limit": 32768,
+  "timeout_multipliers": {
+    "agent_setup": 8.0,
+    "agent": 6.0,
+    "overall": 3.0
+  },
+  "concurrency": 2,
+  "attempts": 1,
+  "force_build": false,
+  "harbor_version": null,
+  "opencode_versions": [
+    "1.18.25"
+  ],
+  "started_at": "2026-08-28T02:00:03.164124",
+  "finished_at": "2026-08-28T05:55:01.595998",
+  "elapsed_seconds": 14098.432
+}

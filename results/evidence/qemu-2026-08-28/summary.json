@@ -1,0 +1,8 @@
+{
+  "total_trials": 12,
+  "valid": 0,
+  "error": 0,
+  "invalid_verifier": 12,
+  "mean_reward_valid": null,
+  "completion_rate": 0.0
+}

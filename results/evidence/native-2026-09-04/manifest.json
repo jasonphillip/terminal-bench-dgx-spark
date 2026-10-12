@@ -1,0 +1,41 @@
+{
+  "job_name": "nightly-2026-09-04",
+  "dataset_name": "terminal-bench",
+  "dataset_version": "2.0",
+  "task_list": [
+    "install-windows-3.11",
+    "fix-ocaml-gc",
+    "git-leak-recovery",
+    "build-cython-ext",
+    "pytorch-model-recovery",
+    "sam-cell-seg",
+    "model-extraction-relu-logits",
+    "nginx-request-logging",
+    "sparql-university",
+    "large-scale-text-editing",
+    "sqlite-db-truncate",
+    "sanitize-git-repo"
+  ],
+  "exclude_count": 69,
+  "model_name": "deepseek-v4-flash",
+  "provider_name": "dsv4",
+  "inference_location": "remote vLLM endpoint on the LAN",
+  "base_url": "http://<inference-host>:8002/v1",
+  "context_limit": 458752,
+  "output_limit": 32768,
+  "timeout_multipliers": {
+    "agent_setup": 8.0,
+    "agent": 6.0,
+    "overall": 3.0
+  },
+  "concurrency": 2,
+  "attempts": 1,
+  "force_build": true,
+  "harbor_version": "0.22.0",
+  "opencode_versions": [
+    "1.18.27"
+  ],
+  "started_at": "2026-09-04T02:00:04.161637",
+  "finished_at": "2026-09-04T08:01:51.040754",
+  "elapsed_seconds": 21706.879
+}
