@@ -33,13 +33,17 @@ common local servers.
 ```bash
 export LOCAL_BASE_URL="http://<your-endpoint>:8002/v1"
 export LOCAL_MODEL="<served-model-name>"
+export TRIALS=2       # attempts per task
+export CONCURRENCY=2  # concurrent trials
 # Host prerequisite: task networking requires IPv4 forwarding.
 sudo sysctl -w net.ipv4.ip_forward=1
 # run/bench.sh passes --force-build so task images build natively for arm64 (no qemu).
 bash run/bench.sh
 ```
 
-Results append to `results/scores.csv` (date, trials, errors, mean reward).
+Flags checked against the Harbor 0.22.0 CLI.
+
+Results append to `results/scores.csv` (date, valid trials, errors, mean reward); `results/<job>.trials.json` records run settings and trial outcomes.
 
 ## RESOLVED 2026-08-28: build task images natively instead of emulating
 
@@ -92,8 +96,9 @@ fixed panel. Do not put these numbers next to leaderboard runs.
 Measured on DGX Spark (GB10, 128 GB unified, ~273 GB/s memory bandwidth). Decode is
 bandwidth-bound: dense ~32B models decode at ~10 tok/s (unusable for agentic loops);
 MoE models with small active parameter counts are the workable class (e.g.
-Qwen3-30B-A3B ~44–89 tok/s single-stream per public GB10 benchmarks). Serving notes live in a companion
-repo: [dgx-spark-llm-serving](https://github.com/jasonphillip/dgx-spark-llm-serving).
+Qwen3-30B-A3B up to ~89 tok/s single-stream in public llama.cpp benchmarks).
+Serving notes live in a companion repo:
+[dgx-spark-llm-serving](https://github.com/jasonphillip/dgx-spark-llm-serving).
 
 ## License
 

@@ -2,6 +2,8 @@
 
 `scores.csv` accumulates one row per nightly run since the native-arm64 fix:
 `date,valid_trials,errors,mean_reward_valid,in_tokens,out_tokens,invalid_verifier`.
+Each new run also writes `<job>.trials.json` with run settings and one sanitized
+status and reward record per trial. Missing or unreadable rewards count as errors.
 
 Rows before 2026-08-29 are not included. Under qemu emulation the TB2 verifier
 segfaulted before running tests, so every earlier score was invalid rather than zero.
