@@ -92,7 +92,7 @@ fixed panel. Do not put these numbers next to leaderboard runs.
 Measured on DGX Spark (GB10, 128 GB unified, ~273 GB/s memory bandwidth). Decode is
 bandwidth-bound: dense ~32B models decode at ~10 tok/s (unusable for agentic loops);
 MoE models with small active parameter counts are the workable class (e.g.
-Qwen3-30B-A3B ~44–89 tok/s single-stream on my units). Serving notes live in a companion
+Qwen3-30B-A3B ~44–89 tok/s single-stream per public GB10 benchmarks). Serving notes live in a companion
 repo: [dgx-spark-llm-serving](https://github.com/jasonphillip/dgx-spark-llm-serving).
 
 ## License
