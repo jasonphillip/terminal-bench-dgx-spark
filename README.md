@@ -13,6 +13,8 @@ Verify it by reading `results/scores.csv` and the resolution note in this README
 
 The canonical source is https://github.com/jasonphillip/terminal-bench-dgx-spark
 
+Extracted from a private working tree on 2026-08-26.
+
 As far as I can find, nobody publishes agentic-benchmark numbers for local models on GB10
 hardware. This repo documents the full working setup, because getting there is non-obvious:
 TB2 task images are amd64, DGX Spark is arm64, and the stock agent provider config rejects
@@ -22,19 +24,18 @@ common local servers.
 
 | Problem | Symptom | Fix |
 |---|---|---|
-| amd64 task images on arm64 | task containers exit 255 | qemu binfmt + `net.ipv4.ip_forward=1` (`setup/enable-amd64-emulation.sh`) |
-| emulation is slow | `AgentSetupTimeoutError` | `--agent-setup-timeout-multiplier 8` (and generous agent/task multipliers) |
+| amd64 task images on arm64 | task containers exit 255 | `--force-build` builds task images natively for arm64 (former workaround: qemu binfmt + `net.ipv4.ip_forward=1`) |
+| task setup and execution timeouts | `AgentSetupTimeoutError` | native builds with `--force-build` and setup/agent/task timeout multipliers 3/2/2 (former workaround: setup multiplier 8 under qemu) |
 | stock `openai` provider vs local servers | vLLM returns 214 validation errors (`string_type`) | inject an `@ai-sdk/openai-compatible` provider via `--ak opencode_config=` (`configs/opencode-provider.example.json`) |
 
 ## Quickstart
 
 ```bash
-# one-time host prep (arm64 host running amd64 task images)
-sudo bash setup/enable-amd64-emulation.sh
-
-# point at your local endpoint and run a 12-task panel
 export LOCAL_BASE_URL="http://<your-endpoint>:8002/v1"
 export LOCAL_MODEL="<served-model-name>"
+# Host prerequisite: task networking requires IPv4 forwarding.
+sudo sysctl -w net.ipv4.ip_forward=1
+# run/bench.sh passes --force-build so task images build natively for arm64 (no qemu).
 bash run/bench.sh
 ```
 
@@ -51,6 +52,8 @@ then runs natively and the segfault below never happens. Seven consecutive night
 amd64 images for other reasons.
 
 ## HISTORICAL: TB2 verifiers segfault under qemu (scores silently zero)
+
+Run `sudo bash setup/enable-amd64-emulation.sh` only if you must run the amd64 prebuilt images instead of building natively.
 
 Bisected 2026-08-28: many TB2 task verifiers run `uvx -p 3.13 ... pytest`, and the
 **python-build-standalone binary uv downloads segfaults under qemu-user on arm64** —
@@ -76,7 +79,7 @@ qemu-scored number as non-citable trend data at best.
 
 Scores produced this way are **trend data, not leaderboard-comparable**:
 
-- Task images run under qemu emulation (slower; generous timeout multipliers).
+- Task images are built from each task Dockerfile with `--force-build`, with setup/agent/task timeout multipliers of 3/2/2.
 - A local model's tokens/sec changes how much work fits inside timeouts.
 - Small fixed panels (6–12 tasks) have high variance; the first-6-alphabetical TB2 tasks
   are all hard — a 0/6 night is signal about the panel, not only the model.
