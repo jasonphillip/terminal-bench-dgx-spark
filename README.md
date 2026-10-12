@@ -35,6 +35,7 @@ export LOCAL_BASE_URL="http://<your-endpoint>:8002/v1"
 export LOCAL_MODEL="<served-model-name>"
 export TRIALS=2       # attempts per task
 export CONCURRENCY=2  # concurrent trials
+bash run/smoke.sh   # check Harbor, Docker, and the command without inference
 # Host prerequisite: task networking requires IPv4 forwarding.
 sudo sysctl -w net.ipv4.ip_forward=1
 # run/bench.sh passes --force-build so task images build natively for arm64 (no qemu).
@@ -42,6 +43,9 @@ bash run/bench.sh
 ```
 
 Flags checked against the Harbor 0.22.0 CLI.
+
+Reusing a `JOB` name resumes that job. A new name is an independent repeat.
+By default, `run/bench.sh` generates a timestamped job name.
 
 Results append to `results/scores.csv` (date, valid trials, errors, mean reward); `results/<job>.trials.json` records run settings and trial outcomes.
 

@@ -12,7 +12,13 @@
 #   TRIALS           attempts per task (default 2)
 #   CONCURRENCY      concurrent trials (default 2)
 #   CTX / OUT        context/output token limits advertised to the agent
+#   JOB              existing name resumes that job; a new name is an independent repeat
 set -euo pipefail
+
+if [[ "${1:-}" != "" && "${1:-}" != "--print-command" ]]; then
+  echo "usage: bench.sh [--print-command]" >&2
+  exit 2
+fi
 
 : "${LOCAL_BASE_URL:?set LOCAL_BASE_URL}"
 : "${LOCAL_MODEL:?set LOCAL_MODEL}"
@@ -27,7 +33,7 @@ CTX="${CTX:-131072}"
 OUT="${OUT:-32768}"
 HOST_IP="$(echo "$LOCAL_BASE_URL" | sed -E 's#https?://([^:/]+).*#\1#')"
 RESULTS_DIR="$(cd "$(dirname "$0")/.." && pwd)/results"
-JOB="tb2-$(date +%F)"
+JOB="${JOB:-tb2-$(date +%Y%m%d-%H%M%S)}"
 
 # The provider block is the load-bearing part: the stock `openai` provider fails
 # schema validation against vLLM (214 "string_type" errors). openai-compatible works.
@@ -36,15 +42,23 @@ OPENCODE_CONFIG=$(cat <<EOF
 EOF
 )
 
-harbor run -d terminal-bench@2.0 -a opencode -m "local/$LOCAL_MODEL" \
-  --ak "opencode_config=$OPENCODE_CONFIG" \
-  --allow-agent-host "$HOST_IP" \
-  --force-build \
-  --agent-setup-timeout-multiplier "$SETUP_TIMEOUT_MULTIPLIER" \
-  --agent-timeout-multiplier "$AGENT_TIMEOUT_MULTIPLIER" \
-  --timeout-multiplier "$TIMEOUT_MULTIPLIER" \
-  -l "$PANEL_SIZE" -k "$TRIALS" -n "$CONCURRENCY" \
-  --jobs-dir "$RESULTS_DIR" --job-name "$JOB"
+command=(harbor run -d terminal-bench@2.0 -a opencode -m "local/$LOCAL_MODEL"
+  --ak "opencode_config=$OPENCODE_CONFIG"
+  --allow-agent-host "$HOST_IP"
+  --force-build
+  --agent-setup-timeout-multiplier "$SETUP_TIMEOUT_MULTIPLIER"
+  --agent-timeout-multiplier "$AGENT_TIMEOUT_MULTIPLIER"
+  --timeout-multiplier "$TIMEOUT_MULTIPLIER"
+  -l "$PANEL_SIZE" -k "$TRIALS" -n "$CONCURRENCY"
+  --jobs-dir "$RESULTS_DIR" --job-name "$JOB")
+
+if [[ "${1:-}" == "--print-command" ]]; then
+  printf '%q ' "${command[@]}"
+  printf '\n'
+  exit 0
+fi
+
+"${command[@]}"
 
 # A segfaulted verifier is invalid, even when it emitted a reward.
 python3 "$(dirname "$0")/summarize.py" "$RESULTS_DIR/$JOB" "$RESULTS_DIR/scores.csv"

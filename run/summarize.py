@@ -13,9 +13,10 @@ from pathlib import Path
 
 
 def task_id(trial):
-    for filename in ("config.json", "trial.json"):
+    """Return the task name and the trial artifact that supplied it."""
+    for filename in ("result.json", "config.json"):
         path = trial / filename
-        if not path.is_file() or path.stat().st_size > 16_384:
+        if not path.is_file():
             continue
         try:
             config = json.loads(path.read_text())
@@ -23,16 +24,31 @@ def task_id(trial):
             continue
         if not isinstance(config, dict):
             continue
-        for key in ("task_id", "task_name"):
-            if isinstance(config.get(key), str):
-                return config[key]
-        task = config.get("task")
+        name = config.get("task_name")
+        if isinstance(name, str) and name:
+            return name, f"{filename}.task_name"
+        if filename == "result.json":
+            registry_id = config.get("task_id")
+            if isinstance(registry_id, dict):
+                name = registry_id.get("name")
+                if isinstance(name, str) and name:
+                    return name, "result.json.task_id.name"
+                path = registry_id.get("path")
+                if isinstance(path, str) and path.rstrip("/"):
+                    return Path(path.rstrip("/")).name, "result.json.task_id.path"
+        # TrialResult embeds TrialConfig; a standalone config.json has the
+        # same task shape. Local/Git tasks use path; registry tasks use name.
+        nested = config.get("config") if filename == "result.json" else config
+        task = nested.get("task") if isinstance(nested, dict) else None
         if isinstance(task, dict):
-            for key in ("id", "name"):
-                if isinstance(task.get(key), str):
-                    return task[key]
-    match = re.fullmatch(r"(.+)__(?:[0-9a-f]{8,}|\d+)", trial.name)
-    return match.group(1) if match else None
+            path = task.get("path")
+            if isinstance(path, str) and path.rstrip("/"):
+                return Path(path.rstrip("/")).name, f"{filename}.task.path"
+            name = task.get("name")
+            if isinstance(name, str) and name.rsplit("/", 1)[-1]:
+                return name.rsplit("/", 1)[-1], f"{filename}.task.name"
+    match = re.fullmatch(r"(.+)__([A-Za-z0-9]{7})", trial.name)
+    return (match.group(1), "directory_name") if match else (None, "missing")
 
 
 def harbor_version():
@@ -75,13 +91,16 @@ def summarize(job, out):
                     rewards.append(reward)
             except (OSError, ValueError):
                 pass
+        identity, identity_source = task_id(trial)
         records.append({
-            "trial_dir": trial.name, "task_id": task_id(trial),
+            "trial_dir": trial.name, "task_id": identity,
+            "task_id_source": identity_source,
             "status": status, "reward": reward,
         })
 
     config = {
         "date": today,
+        "job_name": job.name,
         "model": os.environ.get("LOCAL_MODEL"),
         "harbor_version": harbor_version(),
         "panel_size": int(os.environ.get("PANEL_SIZE", "12")),
