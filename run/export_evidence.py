@@ -10,23 +10,40 @@ from pathlib import Path
 
 
 SEGFAULT_MARKERS = ("Segmentation fault", "uncaught target signal")
+URL = re.compile(r"https?://[^\s\"'<>]+", re.I)
+IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+HOME_PATH = re.compile(r"/home/[^\s\"'<>),;]+")
+CREDENTIAL = re.compile(
+    r"(?i)\b(?:api.?key|token|secret)\b\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s,}]+)"
+)
+SESSION_ID = re.compile(
+    r"(?i)session|\b(?:ses|sess)[_-][A-Za-z0-9_-]+\b|"
+    r"\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b"
+)
 
 
-def sanitize(value):
-    """Scrub paths, network addresses, credentials, and private links."""
-    if isinstance(value, dict):
-        return {sanitize(str(k)): sanitize(v) for k, v in value.items()
-                if not re.search(r"api.?key|token|secret", str(k), re.I)}
-    if isinstance(value, list):
-        return [sanitize(v) for v in value]
+def has_private_identifier(value):
+    """Reject selected fields that still identify a session or private endpoint."""
+    return bool(SESSION_ID.search(value) or re.search(r"claude\.ai|api.?key|/home/", value, re.I)
+                or IPV4.search(value))
+
+
+def public_name(value):
+    """Preserve public names exactly, or omit an unsafe value."""
+    return value if isinstance(value, str) and not has_private_identifier(value) else None
+
+
+def sanitize_text(value):
+    """Sanitize one selected free-text field; omit it if a session marker remains."""
     if not isinstance(value, str):
-        return value
-    value = re.sub(r"https?://[^\s\"'<>]*claude\.ai[^\s\"'<>]*", "<redacted-link>", value, flags=re.I)
-    value = re.sub(r"https?://[^\s\"'<>]*/sessions?/[^\s\"'<>]*", "<redacted-link>", value, flags=re.I)
-    value = re.sub(r"/home/[^\s\"'<>),;]+", "<home>", value)
-    value = re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", "<host>", value)
-    value = re.sub(r"(?i)\b(?:api.?key|token|secret)\b\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s,}]+)", "<redacted>", value)
-    return re.sub(r"(?i)api.?key|token|secret|session", "<redacted>", value)
+        return None
+    if SESSION_ID.search(value) or any("claude.ai" in match.group().lower()
+                                       for match in URL.finditer(value)):
+        return None
+    value = CREDENTIAL.sub("<redacted-credential>", value)
+    value = HOME_PATH.sub("<home>", value)
+    value = IPV4.sub("<host>", value)
+    return None if has_private_identifier(value) else value
 
 
 def elapsed(start, finish):
@@ -65,7 +82,7 @@ def command(config, provider_config, provider, model, dataset):
         "provider": {provider: {
             "npm": provider_config.get("npm"),
             "name": provider_config.get("name"),
-            "options": {"baseURL": sanitize(provider_config.get("options", {}).get("baseURL", ""))},
+            "options": {"baseURL": sanitize_text(provider_config.get("options", {}).get("baseURL", "")) or ""},
             "models": {model: {"limit": provider_config["models"][model].get("limit", {})}},
         }}
     }
@@ -87,9 +104,10 @@ def command(config, provider_config, provider, model, dataset):
     args += ["-l", str(dataset["n_tasks"]), "-k", str(config.get("n_attempts", 1)),
              "-n", str(config["n_concurrent_trials"])]
     for task in dataset.get("exclude_task_names", []):
-        args += ["-x", sanitize(task)]
-    args += ["--jobs-dir", "<home>", "--job-name", sanitize(config["job_name"])]
-    return sanitize(shlex.join(args)) + "\n"
+        if public_name(task) is not None:
+            args += ["-x", task]
+    args += ["--jobs-dir", "<home>", "--job-name", public_name(config["job_name"]) or "<omitted>"]
+    return (sanitize_text(shlex.join(args)) or "") + "\n"
 
 
 def export(job, out, harbor_version=None):
@@ -102,41 +120,52 @@ def export(job, out, harbor_version=None):
     limits = provider_config["models"][model]["limit"]
     ordered = []
     for trial in job.iterdir():
-        if trial.is_dir() and (trial / "result.json").is_file():
-            data = load(trial / "result.json")
-            ordered.append((data.get("started_at") or "", trial.name, trial, data))
+        if trial.is_dir():
+            data = load(trial / "result.json") if (trial / "result.json").is_file() else None
+            ordered.append(((data or {}).get("started_at") or "", trial.name, trial, data))
     ordered.sort()
     records, versions = [], set()
+    exception_count = 0
     for _, name, trial, data in ordered:
-        status, reward, segfault = classify(trial)
-        version = data.get("agent_info", {}).get("version")
+        status, reward, segfault = classify(trial) if data is not None else ("incomplete", None, False)
+        version = (data or {}).get("agent_info", {}).get("version")
         if version:
-            versions.add(version)
-        exception = data.get("exception_info") or {}
-        records.append(sanitize({
-            "task_name": data.get("task_name"), "trial_dir": name,
-            "started_at": data.get("started_at"), "finished_at": data.get("finished_at"),
-            "elapsed_seconds": elapsed(data.get("started_at"), data.get("finished_at")),
+            safe_version = public_name(version)
+            if safe_version is not None:
+                versions.add(safe_version)
+        exception = (data or {}).get("exception_info") or {}
+        exception_count += bool(exception)
+        started_at, finished_at = (data or {}).get("started_at"), (data or {}).get("finished_at")
+        record = {
+            "task_name": public_name((data or {}).get("task_name") or name.rsplit("__", 1)[0]),
+            "trial_dir": public_name(name),
+            "started_at": public_name(started_at), "finished_at": public_name(finished_at),
+            "elapsed_seconds": elapsed(started_at, finished_at),
             "status": status, "reward": reward,
-            "exception_type": exception.get("exception_type") if status != "valid" else None,
-            "exception_message": exception.get("exception_message") if status != "valid" else None,
+            "exception_type": public_name(exception.get("exception_type")),
+            "exception_message": sanitize_text(exception.get("exception_message")),
             "verifier_segfault": segfault,
-        }))
+        }
+        if data is None:
+            record["reason"] = "missing result.json"
+        records.append(record)
     counts = {status: sum(r["status"] == status for r in records)
-              for status in ("valid", "error", "invalid_verifier")}
+              for status in ("valid", "error", "invalid_verifier", "incomplete")}
     rewards = [r["reward"] for r in records if r["status"] == "valid"]
     summary = {"total_trials": len(records), **counts,
+               "errored_trials": exception_count,
+               "harbor_errored_trials": result.get("stats", {}).get("n_errored_trials"),
                "mean_reward_valid": sum(rewards) / len(rewards) if rewards else None,
                "completion_rate": counts["valid"] / len(records) if records else None}
-    manifest = sanitize({
-        "job_name": config["job_name"], "dataset_name": dataset["name"],
-        "dataset_version": dataset["version"],
+    manifest = {
+        "job_name": public_name(config["job_name"]), "dataset_name": public_name(dataset["name"]),
+        "dataset_version": public_name(dataset["version"]),
         "task_list": [r["task_name"] for r in records],
         "exclude_count": len(dataset.get("exclude_task_names", [])),
-        "model_name": model, "provider_name": provider,
+        "model_name": public_name(model), "provider_name": public_name(provider),
         "inference_location": "remote vLLM endpoint on the LAN",
         "base_url": re.sub(r"(?<=://)[^/:]+", "<inference-host>",
-                           sanitize(provider_config.get("options", {}).get("baseURL", ""))),
+                           sanitize_text(provider_config.get("options", {}).get("baseURL", "")) or ""),
         "context_limit": limits.get("context"), "output_limit": limits.get("output"),
         "timeout_multipliers": {
             "agent_setup": config.get("agent_setup_timeout_multiplier"),
@@ -145,10 +174,11 @@ def export(job, out, harbor_version=None):
         "concurrency": config.get("n_concurrent_trials"),
         "attempts": config.get("n_attempts", 1),
         "force_build": config.get("environment", {}).get("force_build", False),
-        "harbor_version": harbor_version, "opencode_versions": sorted(versions),
-        "started_at": result.get("started_at"), "finished_at": result.get("finished_at"),
+        "harbor_version": public_name(harbor_version), "opencode_versions": sorted(versions),
+        "started_at": public_name(result.get("started_at")),
+        "finished_at": public_name(result.get("finished_at")),
         "elapsed_seconds": elapsed(result.get("started_at"), result.get("finished_at")),
-    })
+    }
     out.mkdir(parents=True, exist_ok=True)
     for filename, data in (("manifest.json", manifest), ("trials.json", records),
                            ("summary.json", summary)):
@@ -163,7 +193,8 @@ def export(job, out, harbor_version=None):
     excerpt = ""
     if representative:
         lines = (representative / "verifier" / "test-stdout.txt").read_text(errors="replace").splitlines()
-        excerpt = "\n".join(sanitize(line) for line in lines[-40:]) + "\n"
+        excerpt = "\n".join(clean for line in lines[-40:]
+                            if (clean := sanitize_text(line)) is not None) + "\n"
     (out / "verifier-excerpt.txt").write_text(excerpt)
     return summary
 

@@ -1,6 +1,6 @@
 # Terminal-Bench 2.0 on NVIDIA DGX Spark (GB10 / arm64)
 
-This repository helps someone run Terminal-Bench 2.0 against a local model on an arm64 DGX Spark. Terminal-Bench task images and verifiers need native arm64 builds for trustworthy scores on this host.
+The recorded runs used one DGX Spark as the harness host and two more DGX Sparks to serve inference. The runner in this repository targets any OpenAI-compatible endpoint. Terminal-Bench task images and verifiers need native arm64 builds for trustworthy scores on the harness host.
 
 ## What this is, in one verifiable line
 
@@ -36,7 +36,7 @@ bash run/bench.sh
 
 ## One measured result
 
-On 2026-09-04, the recorded CSV reports 12 valid trials, 1 error, 0 invalid verifiers, and mean reward 0.667. Harbor's job `result.json` records one errored trial: `install-windows-3.11` raised `AgentTimeoutError` ("Agent execution timed out after 21600.0 seconds") and still wrote reward 0. The nightly CSV counted Harbor's agent-side exception as an error and included its reward in the 12 valid trials. The evidence bundle counts reward files instead, so it recomputes 12 valid trials, 0 errors, 0 invalid verifiers, and mean reward 0.667. The CSV stays as recorded.
+On 2026-09-04, the recorded CSV reports 12 valid trials, 1 error, 0 invalid verifiers, and mean reward 0.667. Harbor's job `result.json` records one errored trial: `install-windows-3.11` raised `AgentTimeoutError` ("Agent execution timed out after 21600.0 seconds") and still wrote reward 0. The evidence bundle records both facts: 12 valid rewards and 1 agent exception. It has 0 reward-file errors and 0 invalid verifiers. The CSV stays as recorded.
 
 ```text
 https://github.com/jasonphillip/terminal-bench-dgx-spark/blob/main/results/scores.csv
@@ -55,7 +55,7 @@ The OpenCode trial versions were 1.18.25 on 2026-08-29 through 2026-09-01, 1.18.
 
 The nightly script passed `-x` for every task in its seen list. Exclusion counts were 0, 12, 24, 36, 47, 58, and 69. Harbor's first-12 selection then reached new tasks. A seen-list bug repeated `install-windows-3.11` on 2026-09-01 through 2026-09-04. The bug was fixed on 2026-09-04. The 84 trials cover 81 distinct tasks.
 
-The nightly CSV's `errors` column counted Harbor's errored trials, including agent-side exceptions that still wrote reward 0. The file-based evidence recount counts reward files, so that trial is valid there and adds no error. The revised summarizer counts missing, unreadable, malformed, and nonfinite rewards as errors. It excludes a verifier with a segfault marker from the valid mean. `results/scores.csv` stays as recorded. `results/evidence/` holds recomputed per-trial records and sanitized job metadata. Jobs from 2026-09-05 through 2026-09-09 exist in the job store but are not in the CSV.
+The nightly CSV's `errors` column counted Harbor's errored trials, including agent-side exceptions that still wrote reward 0. The evidence recount records reward validity and agent exceptions separately. The revised summarizer counts missing, unreadable, malformed, and nonfinite rewards as errors. It excludes a verifier with a segfault marker from the valid mean. `results/scores.csv` stays as recorded. `results/evidence/` holds recomputed per-trial records and sanitized job metadata. Jobs from 2026-09-05 through 2026-09-09 exist in the job store but are not in the CSV.
 
 ## HISTORICAL: TB2 verifiers segfault under qemu
 

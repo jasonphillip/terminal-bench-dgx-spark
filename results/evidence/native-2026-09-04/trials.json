@@ -7,8 +7,8 @@
     "elapsed_seconds": 21706.803,
     "status": "valid",
     "reward": 0.0,
-    "exception_type": null,
-    "exception_message": null,
+    "exception_type": "AgentTimeoutError",
+    "exception_message": "Agent execution timed out after 21600.0 seconds",
     "verifier_segfault": false
   },
   {

@@ -3,6 +3,9 @@
   "valid": 0,
   "error": 0,
   "invalid_verifier": 12,
+  "incomplete": 0,
+  "errored_trials": 1,
+  "harbor_errored_trials": 1,
   "mean_reward_valid": null,
   "completion_rate": 0.0
 }
